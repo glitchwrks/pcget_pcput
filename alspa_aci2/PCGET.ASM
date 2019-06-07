@@ -29,6 +29,7 @@
 ;		   same as the Vector Graphic version as 
 ;		   both use the same 8251 ports for serial 
 ;		   I/O.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Serial Port Equates
