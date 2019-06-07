@@ -64,8 +64,8 @@ CR	EQU	13
 
 ;  See if an alternate port was specified
 
-haveFn	mvi	b,CONDR		;assume port a used
-	lxi	d,mRcvC		;port a send message
+haveFn	mvi	b,CONDR		;assume CONSOLE port used
+	lxi	d,mRcvC		;Console port send message
 	lda	PARAM2		;A=1st character of parameter 2
 	ani	5fh		;force upper case
 	cpi	'M'		;Modem port specified?
@@ -73,11 +73,11 @@ haveFn	mvi	b,CONDR		;assume port a used
 	cpi	'P'		;Printer port specified?
 	jnz	doXfer		;no, go do the transfer
 	mvi	b,PRINTDR	;Use printer port
-	lxi	d,mRcvP	;Printer port send message
+	lxi	d,mRcvP		;Printer port send message
 	call	initP
 	jmp	doXfer
 usePtM	mvi	b,MODEMDR	;use modem port
-	lxi	d,mRcvM	;Modem port send message
+	lxi	d,mRcvM		;Modem port send message
 	call	initM		;Initialize MODEM port
 	jmp	doXfer
 
@@ -131,13 +131,10 @@ doXfer	mov	a,b		;a=address of serial port to use
 	LXI	SP,STACK	;SP=MY STACK
 	xra	a		
 	sta	SECTNO		;initialize sector number to zero
+	PUSH	D		;Save message string pointer
 	CALL	OPEN$FILE	;OPEN THE FILE
-	lxi	d,mRcvA		;assume using port A
-	lda	rcvSDR		;using port A or B?
-	cpi	SIOADR
-	jz	sendA
-	lxi	d,mRcvB		;using port B
-sendA	MVI	C,PRINT
+	POP	D		;Restore message string pointer
+	MVI	C,PRINT
 	CALL	BDOS		;PRINT ID MESSAGE
 
 ;  GOBBLE UP GARBAGE CHARS FROM THE LINE
@@ -145,7 +142,7 @@ sendA	MVI	C,PRINT
 purge	MVI	B,1		;times out after 1 second if no data
 	CALL	RECV
 	jc	lineClr		;line is clear, go wait for initial NAK
-	cpi	ctrlc		;exit if abort requested
+	cpi	CTRLC		;exit if abort requested
 	jz	abort
 	jmp	purge
 
@@ -156,7 +153,7 @@ lineClr	xra	a		;clear crc flag = checksum mode
 WAITNAK	MVI	B,1		;TIMEOUT DELAY
 	CALL	RECV
 	JC	WAITNAK
-	cpi	ctrlc		;abort requested?
+	cpi	CTRLC		;abort requested?
 	jz	abort
 	CPI	NAK		;NAK RECEIVED?
 	jz	SENDB		;yes, send file in checksum mode
@@ -218,7 +215,7 @@ sndSkip	call	SEND
 
 	CPI	ACK		;ACK RECIEVED?
 	JZ	SENDB		;..YES, SEND NEXT SECT
-	cpi	ctrlc		;control-c to abort?
+	cpi	CTRLC		;control-c to abort?
 	jz	abort
 	JMP	REPTB		;PROBABLY NAK - TRY AGAIN
 ;
@@ -232,7 +229,7 @@ OPEN$FILE LXI	D,FCB
 	INR	A		;OPEN OK?
 	RNZ			;GOOD OPEN
 	CALL	ERXIT
-	DB	13,10,'Can''t Open File',13,10,'$'
+	DB	13,10,"Can't Open File",13,10,'$'
 
 ; - - - - - - - - - - - - - - -
 ;EXIT PRINTING MESSAGE FOLLOWING 'CALL ERXIT'
@@ -247,10 +244,10 @@ EXIT	LHLD	STACK		;GET ORIGINAL STACK
 ;MODEM RECV
 ;-------------------------------------
 RECV	PUSH	D		;SAVE
-MSEC	lxi	d,(248shl 8)	;63 cycles, 4.032ms/wrap*248=1s (4MHz)
+MSEC	lxi	d,63		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
 
 rcvSCR	equ	$+1		;address of I/O port for the following IN
-MWTI	IN	SIOACR		;(10)
+MWTI	IN	CONCR		;(10)
 	ANI	RCVMASK		;(7)
 	CPI	RCVRDY		;(7)
 	JZ	MCHAR		;(10) GOT CHAR
@@ -275,7 +272,7 @@ MWTI	IN	SIOACR		;(10)
 ;GOT MODEM CHAR
 
 rcvSDR	equ	$+1		;address of I/O port for the following IN
-MCHAR	IN	SIOADR
+MCHAR	IN	CONDR
 	POP	D		;RESTORE DE
 	PUSH	PSW		;CALC CHECKSUM
 	ADD	C
@@ -293,14 +290,14 @@ SEND	PUSH	PSW		;CHECK IF MONITORING OUTPUT
 	MOV	C,A
 
 sndSCR	equ	$+1		;address of I/O port for the following IN
-SENDW	IN	SIOACR
+SENDW	IN	CONCR
 	ANI	XMTMASK
 	CPI	XMTRDY
 	JNZ	SENDW
 	POP	PSW		;GET CHAR
 
 sndSDR	equ	$+1		;address of I/O port for the following IN
-	OUT	SIOADR
+	OUT	CONDR
 	RET
 
 ;
@@ -354,7 +351,7 @@ XFER$CPLT:
 	CALL	ERXIT
 	DB	13,10,10,'Transfer Complete',13,10,'$'
 
-abort	call	erxit
+abort	call	ERXIT
 	DB	13,10,10,'Transfer Aborted',13,10,'$'
 
 ;-----------------------------------------------------------------------------
