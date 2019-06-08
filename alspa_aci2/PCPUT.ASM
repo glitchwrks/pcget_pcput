@@ -450,7 +450,7 @@ MHELP:	db	CR,LF,'PCPUT v1.0.1 for Alspa ACI-2',CR,LF,LF
 STACK	DS	2	;STACK POINTER
 SECTNO	DS	1	;CURRENT SECTOR NUMBER 
 ERRCT	DS	1	;ERROR COUNT
-crcFlag	ds	1	;non-zero if using CRC
-crc16	ds	2	;computed crc
+CRCFLAG	ds	1	;non-zero if using CRC
+CRC16	ds	2	;computed crc
 
 	END
