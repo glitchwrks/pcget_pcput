@@ -230,7 +230,7 @@ SENDC:	MOV	A,M
 
 	LDA	CRCFLAG		;crc or checksum?
 	ORA	A
-	JZ	SNCSKS		;flag clear = checksum
+	JZ	SNDCKS		;flag clear = checksum
 	LDA	CRC16+1		;a=high byte of CRC
 	CALL	SEND		;send it
 	LDA	CRC16		;a=low byte of crc
