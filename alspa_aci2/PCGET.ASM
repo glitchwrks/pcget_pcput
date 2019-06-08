@@ -94,8 +94,8 @@ PARAM2	EQU	PARAM1+16	;COMMAND LINE PARAMETER 2
 START:	LDA	PARAM1		;A=1st character of parameter 1
 	CPI	' '		;make sure file name present
 	JNZ	HAVEFN		;yes, have a file name
-	LXI	d,MHELP		;display usage message
-	MVI	c,PRINT
+	LXI	D,MHELP		;display usage message
+	MVI	C,PRINT
 	CALL	BDOS
 	RET			;return to CPM
 
@@ -275,7 +275,7 @@ DO$ACK:	MVI	A,ACK
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 WRITE$ERROR:
 	CALL	ERXIT
-	DB	13,10,10,'Error Writing File',13,10,'$'
+	DB	CR,LF,LF,'Error Writing File',CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;GOT$EOT -- Handle end-of-transfer
@@ -289,7 +289,7 @@ GOT$EOT:
 	INR	A
 	JNZ	XFER$CPLT
 	CALL	ERXIT
-	DB	13,10,10,'Error Closing File',13,10,'$'
+	DB	CR,LF,LF,'Error Closing File',CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;ERASE$OLD$FILE -- Delete any existing file before transfer
@@ -324,8 +324,8 @@ MAKE$NEW$FILE:
 ;DIRFUL -- Print directory full error and exit
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 DIRFUL:	CALL	ERXIT
-	DB	13,10,10,"Error - Can't Make File",13,10
-	DB	"(directory must be full)",13,10,'$'
+	DB	CR,LF,LF,"Error - Can't Make File",CR,LF
+	DB	"(directory must be full)",CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;ERXIT -- Exit and print an error message
@@ -355,8 +355,8 @@ MWTI:	IN	CONCR		;(10)
 	CPI	RCVRDY		;(7)
 	JZ	MCHAR		;(10) GOT CHAR
 
-	cpi	0		;(7) No char present, decrement countdown
-	cpi	0		;(7) waste some time
+	CPI	0		;(7) No char present, decrement countdown
+	CPI	0		;(7) waste some time
 	DCR	E		;(5) COUNT DOWN
 	JNZ	MWTI		;(10) FOR TIMEOUT
 	DCR	D		;do msb every 256th time
@@ -407,31 +407,31 @@ SNDSDR	EQU	$+1		;address of I/O port for the following IN
 	RET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;XFER$CPLT -- XMODEM transfer done, clean up
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+XFER$CPLT:
+	CALL	ERXIT
+	DB	CR,LF,LF,'Transfer Complete',CR,LF,'$'
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;ABORT -- Exit from a user abort
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ABORT:	call	ERXIT
+	db	CR,LF,LF,'Transfer Aborted',CR,LF,'$'
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Message Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-MSENDC	db	'Send file using XMODEM on CONSOLE port (port 2)...$'
-MSENDM	db	'Send file using XMODEM on MODEM port (port 4)...$'
-MSENDP	db	'Send file using XMODEM on PRINTER port (port 0)...$'
-MHELP	db	CR,LF,'PCGET v1.0.1 for Alspa ACI-2',CR,LF,LF
+MSENDC:	db	'Send file using XMODEM on CONSOLE port (port 2)...$'
+MSENDM:	db	'Send file using XMODEM on MODEM port (port 4)...$'
+MSENDP:	db	'Send file using XMODEM on PRINTER port (port 0)...$'
+MHELP:	db	CR,LF,'PCGET v1.0.1 for Alspa ACI-2',CR,LF,LF
 	db	'Receives a file from a PC through a serial port',CR,LF
 	db	'using the XMODEM protocol.',CR,LF,LF
 	db	'Usage: PCGET file.ext [MP]',CR,LF
 	db	'   CONSOLE port (port 2) used by default',CR,LF
 	db	'   Specify M to use MODEM port (port 4)',CR,LF
 	db	'   Specify P to use PRINTER port (port 0)',CR,LF,'$'
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;XFER$CPLT -- XMODEM transfer done, clean up
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-XFER$CPLT:
-	CALL	ERXIT
-	DB	13,10,10,'Transfer Complete',13,10,'$'
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;ABORT -- Exit from a user abort
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ABORT:	call	ERXIT
-	db	13,10,10,'Transfer Aborted',13,10,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Variables and Storage Defines
