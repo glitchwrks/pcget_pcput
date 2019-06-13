@@ -184,7 +184,7 @@ PURGE:	MVI	B,1		;times out after 1 second if no data
 	JMP	PURGE
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;LINECL -- Wair for initial NAK, start XMODEM send
+;LINECL -- Wait for initial NAK, start XMODEM send
 ;
 ;This routine falls through to SENDB to start the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -252,7 +252,7 @@ SNDSKP:	CALL	SEND
 ;OPEN$FILE -- Open disk file for reading
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 OPEN$FILE:
-	 LXI	D,FCB
+	LXI	D,FCB
 	MVI	C,OPEN
 	CALL	BDOS
 	INR	A		;OPEN OK?
