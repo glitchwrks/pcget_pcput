@@ -304,7 +304,7 @@ RECV:	PUSH	D		;Save DE
 MSEC:	LXI	D,63		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
 
 RCVSCR:	EQU	$+1		;Address of I/O port for the following IN
-MWTI:	IN	CONCR		;(10)
+MWTI:	IN	MODEMCR		;(10)
 	ANI	RCVMASK		;(7)
 	CPI	RCVRDY		;(7)
 	JZ	MCHAR		;(10) GOT CHAR
@@ -329,7 +329,7 @@ MWTI:	IN	CONCR		;(10)
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 RCVSDR:	EQU	$+1		;address of I/O port for the following IN
-MCHAR:	IN	CONDR
+MCHAR:	IN	MODEMDR
 	POP	D		;RESTORE DE
 	PUSH	PSW		;CALC CHECKSUM
 	ADD	C
@@ -350,14 +350,14 @@ SEND	PUSH	PSW		;CHECK IF MONITORING OUTPUT
 	MOV	C,A
 
 SNDSCR	EQU	$+1		;address of I/O port for the following IN
-SENDW	IN	CONCR
+SENDW	IN	MODEMCR
 	ANI	XMTMASK
 	CPI	XMTRDY
 	JNZ	SENDW
 	POP	PSW		;GET CHAR
 
 SNDSDR	EQU	$+1		;address of I/O port for the following IN
-	OUT	CONDR
+	OUT	MODEMDR
 	RET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
