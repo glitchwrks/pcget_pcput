@@ -1,14 +1,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;PCGET -- Receive files via XMODEM from a PC
+;PCPUT -- Send files via XMODEM to a PC
 ;
 ;Glitch Works 8085 SBC rev 3 machine-specific version, 
 ;2 MHz 8085. Supports built-in CONSOLE port.
 ;
-;This CP/M program receives a file from a PC via a serial 
-;port and writes it to a file on the CP/M system. The file
-;transfer uses the XMODEM protocol. 
+;This CP/M program send a file from CP/M via a serial 
+;port to a PC. The file transfer uses the XMODEM protocol.
 ;
 ;Copyright (c) 2020 The Glitch Works
+;
+;See LICENSE included in the project root for licensing
+;information.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -30,7 +32,7 @@ RCVRDY	EQU	2		;VALUE WHEN READY
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 DELAY	EQU	124		;63 cycles, 8.064ms/iteration*248=1s (2MHz)
 
-	INCLUDE "../PCGET.INC"	;Bring in core PCGET library
+	INCLUDE "../PCPUT.INC"	;Bring in core PCPUT library
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;HAVEFN -- Set up machine-specific implementation details
@@ -41,17 +43,17 @@ DELAY	EQU	124		;63 cycles, 8.064ms/iteration*248=1s (2MHz)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 HAVEFN:	MVI	B,CONDR		;Default to CONSOLE port
 	MVI	C,CONCR		
-	LXI	D,MSENDC	;CONSOLE port send message
+	LXI	D,MRCVC		;CONSOLE port send message
 	RET			;Back to the core PCGET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Message Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-MSENDC:	db	'Send file using XMODEM on CONSOLE port...$'
-MHELP:	db	CR,LF,'PCGET v1.1 for Glitch Works 8085 SBC rev 3',CR,LF,LF
-	db	'Receives a file from a PC through a serial port '
+MRCVC:	db	'Start XMODEM file receive on CONSOLE port now...$'
+MHELP:	db	CR,LF,'PCPUT v1.1 for Glitch Works 8085 SBC rev 3',CR,LF,LF
+	db	'Transmits a file to a PC through a serial port '
 	db	'using the XMODEM protocol.',CR,LF,LF
-	db	'Usage: PCGET file.ext',CR,LF
+	db	'Usage: PCPUT file.ext',CR,LF
 	db	'   CONSOLE port used by default',CR,LF,'$'
 
 	END
