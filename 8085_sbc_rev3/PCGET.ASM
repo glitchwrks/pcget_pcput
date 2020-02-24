@@ -30,7 +30,7 @@ RCVRDY	EQU	2		;VALUE WHEN READY
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 DELAY	EQU	124		;63 cycles, 8.064ms/iteration*248=1s (2MHz)
 
-	INCLUDE "../PCGET.LIB"	;Bring in core PCGET library
+	INCLUDE "../PCGET.INC"	;Bring in core PCGET library
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;HAVEFN -- Set up machine-specific implementation details

@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;PCGET.LIB -- Receive files via XMODEM from a PC
+;PCGET.INC -- Receive files via XMODEM from a PC
 ;
 ;This is the core machine-independent library for PCGET
 ;implementations. It will not assemble in a meaningful
