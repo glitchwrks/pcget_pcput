@@ -56,17 +56,18 @@ PARAM2	EQU	PARAM1+16	;COMMAND LINE PARAMETER 2
 ;exit.
 ;
 ;Calls out to HAVEFN in the machine-specific implementation
-;then falls through to DOXFER on return.
+;when a filename is present, then jumps to DOXFER.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 START:	LDA	PARAM1		;A=1st character of parameter 1
 	CPI	' '		;make sure file name present
-	JNZ	HAVEFN		;yes, have a file name
-	LXI	D,MHELP		;display usage message
+	JZ	NOFN		;No filename
+	CALL	HAVEFN		;Call HAVEFN, machine-specific implementation
+	JMP	DOXFER		;Do the transfer
+
+NOFN:	LXI	D,MHELP		;display usage message
 	MVI	C,PRINT
 	CALL	BDOS
 	RET			;return to CPM
-	CALL	HAVEFN		;CALL HAVEFN in the machine-specific
-				;implementation
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;DOXFER -- Get ready and start transfer
