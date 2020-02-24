@@ -280,7 +280,7 @@ EXIT:	LHLD	STACK		;GET ORIGINAL STACK
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 RECV:	PUSH	D		;SAVE
-MSEC:	LXI	D,63		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
+MSEC:	LXI	D,248		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
 
 RCVSCR:	EQU	$+1		;address of I/O port for the following IN
 MWTI:	IN	CONCR		;(10)

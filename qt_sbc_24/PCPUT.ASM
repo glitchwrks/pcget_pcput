@@ -1,18 +1,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;PCGET -- Receive files via XMODEM from a PC
+;PCPUT -- Send files via XMODEM to a PC
 ;
-;Otrona Attache, 4 MHz Z80. Supports both external serial
-;ports (MODEM, PRINTER)
+;Quick and Timely SBC 2/4 version, 4 MHz Z80. Supports 
+;built-in console port.
 ;
-;This CP/M program receives a file from a PC via a serial 
-;port and writes it to a file on the CP/M system. The file
-;transfer uses the XMODEM protocol. 
+;PCPUT won't work over the console port with the stock Q&T
+;ROM monitor, since it sets the consle port as 7E1 instead
+;of 8N1. Consider running GWMON as an alternative!
+;
+;This CP/M program sends a file to a PC via a serial port.
+;The file transfer uses the XMODEM protocol. 
 ;
 ;Note this program is gutted from the Ward Christenson 
 ;MODEM program.
 ;
-;Hacked together by Mike Douglas for the Horizon Computer
-;Updated by Glitch Works for the Otrona Attache.
+;Hacked together by Mike Douglas for the VG Bitstreamer II
+;Updated by Glitch Works for the Q&T SBC 2/4
 ;
 ;Glitch Works customization and cleanup is:
 ;
@@ -23,7 +26,7 @@
 ;
 ;Ver	Date	   Desc
 ;---    --------   ----------------------------------------
-;1.0.1  2019-06-07 Customized for the Otrona Attache
+;1.0.1  2019-06-07 Customized for the Q&T SBC 2/4
 ;
 ;1.0    10/7/15	   Initial version. This code is almost the
 ;		   same as the Vector Graphic version as 
@@ -34,15 +37,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Serial Port Equates
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-MODEMCR	EQU	0F1H		;Modem port control register (port 4)
-MODEMDR	EQU	0F0H		;Modem port data register
-PRINTCR	EQU	0F3H		;Printer port control register (port 0)
-PRINTDR EQU	0F2H		;Printer port data register
+CONCR	EQU	2FH		;Console port control register
+CONDR	EQU	2EH		;Console port data register
 
-XMTMASK	EQU	4		;MASK TO ISOLATE XMIT READY BIT
-XMTRDY	EQU	4		;VALUE WHEN READY
-RCVMASK	EQU	1		;MASK TO ISOLATE RECEIVE READY BIT
-RCVRDY	EQU	1		;VALUE WHEN READY
+XMTMASK	EQU	1		;MASK TO ISOLATE XMIT READY BIT
+XMTRDY	EQU	1		;VALUE WHEN READY
+RCVMASK	EQU	2		;MASK TO ISOLATE RECEIVE READY BIT
+RCVRDY	EQU	2		;VALUE WHEN READY
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;XMODEM Protocol Equates
@@ -54,6 +55,7 @@ NAK	EQU	21
 CTRLC	EQU	3
 LF	EQU	10
 CR	EQU	13
+ERRLMT	EQU	5		;MAX ALLOWABLE ERRORS
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;CP/M 2 BDOS Equates
@@ -74,11 +76,11 @@ REN	EQU	23	;0FFH=BAD
 STDMA	EQU	26
 BDOS	EQU	5
 REIPL	EQU	0
-FCB	EQU	5CH	;DEFAULT FCB
+FCB	EQU	5CH	;SYSTEM FCB
 PARAM1	EQU	FCB+1	;COMMAND LINE PARAMETER 1 IN FCB
 PARAM2	EQU	PARAM1+16	;COMMAND LINE PARAMETER 2
 
-	ORG	100H
+	ORG	100h
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;START -- Get ready and begin the transfer
@@ -87,7 +89,7 @@ PARAM2	EQU	PARAM1+16	;COMMAND LINE PARAMETER 2
 ;filename is supplied, a help message is printed and we
 ;exit.
 ;
-;Selected port is determined and set up in HAVEFN.
+;Falls through to DOXFER
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 START:	LDA	PARAM1		;A=1st character of parameter 1
 	CPI	' '		;make sure file name present
@@ -97,14 +99,8 @@ START:	LDA	PARAM1		;A=1st character of parameter 1
 	CALL	BDOS
 	RET			;return to CPM
 
-HAVEFN:	MVI	B,MODEMCR	;Default to MODEM port
-	LXI	D,MSENDM	;MODEM port send message
-	LDA	PARAM2		;A=1st character of parameter 2
-	ANI	5FH		;force upper case
-	CPI	'P'		;PRINTER port specified?
-	JNZ	DOXFER		;no, go do the transfer
-	MVI	B,PRINTDR	;Use printer port
-	LXI	D,MSENDP	;PRINTER port send message
+HAVEFN:	MVI	B,CONDR		;Default to CONSOLE port
+	LXI	D,MRCVC		;CONSOLE port send message
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;DOXFER -- Switch to a local stack and start transfer
@@ -119,9 +115,12 @@ DOXFER:	MOV	A,B		;a=address of serial port to use
 	DAD	SP		;HL=STACK FROM CP/M
 	SHLD	STACK		;..SAVE IT
 	LXI	SP,STACK	;SP=MY STACK
-	XRA	A
-	STA	SECTNO		;init sector number to zero
-	MVI	C,PRINT		;print the send message
+	XRA	A		
+	STA	SECTNO		;initialize sector number to zero
+	PUSH	D		;Save message string pointer
+	CALL	OPEN$FILE	;OPEN THE FILE
+	POP	D		;Restore message string pointer
+	MVI	C,PRINT
 	CALL	BDOS		;PRINT ID MESSAGE
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -129,157 +128,87 @@ DOXFER:	MOV	A,B		;a=address of serial port to use
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 PURGE:	MVI	B,1		;times out after 1 second if no data
 	CALL	RECV
-	JC	RECEIVE$FILE	;line is clear, go receive the file
+	JC	LINECL		;line is clear, go wait for initial NAK
 	CPI	CTRLC		;exit if abort requested
 	JZ	ABORT
 	JMP	PURGE
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;RECEIVE$FILE -- Receive the file via XMODEM
+;LINECL -- Wait for initial NAK, start XMODEM send
+;
+;This routine falls through to SENDB to start the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-RECEIVE$FILE:
-	CALL	ERASE$OLD$FILE
-	CALL	MAKE$NEW$FILE
-	MVI	A,NAK
-	CALL	SEND		;SEND NAK
-
-RECV$LOOP:
-RECV$HDR:
-	MVI	B,3		;3 SEC TIMEOUT
+LINECL:	XRA	A		;clear crc flag = checksum mode
+	STA	CRCFLAG
+WAINAK:	MVI	B,1		;TIMEOUT DELAY
 	CALL	RECV
-	JNC	RHNTO		;NO TIMEOUT
+	JC	WAINAK
+	CPI	CTRLC		;abort requested?
+	JZ	ABORT
+	CPI	NAK		;NAK RECEIVED?
+	JZ	SENDB		;yes, send file in checksum mode
+	CPI	'C'		;'C' for CRC mode received?
+	JNZ	WAINAK		;no, keep waiting
+	STA	CRCFLAG		;set CRC flag non-zero = true
 
-RECV$HDR$TIMEOUT:
-RECV$SECT$ERR:			;PURGE THE LINE OF INPUT CHARS
-	MVI	B,1		;1 SEC W/NO CHARS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;SENDB -- Start the actual XMODEM send
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+SENDB:	CALL	READ$SECTOR
+	LDA	SECTNO		;INCR SECT NO.
+	INR	A
+	STA	SECTNO
+
+REPTB:	MVI	A,SOH		;SEND OR REPEAT SECTOR
+	CALL	SEND
+	LDA	SECTNO
+	CALL	SEND
+	LDA	SECTNO
+	CMA
+	CALL	SEND
+	LXI	H,0		;init crc to zero
+	SHLD	CRC16
+	MOV	C,H		;init checksum in c to zero
+	LXI	H,80H
+SENDC:	MOV	A,M
+	CALL	SEND
+	CALL	CALCRC		;update CRC
+	INX	H
+	MOV	A,H
+	CPI	1		;DONE WITH SECTOR?
+	JNZ	SENDC
+
+	LDA	CRCFLAG		;crc or checksum?
+	ORA	A
+	JZ	SNDCKS		;flag clear = checksum
+	LDA	CRC16+1		;a=high byte of CRC
+	CALL	SEND		;send it
+	LDA	CRC16		;a=low byte of crc
+	JMP	SNDSKP		;skip next instruction	
+SNDCKS:	MOV	A,C		;send the checksum byte
+SNDSKP:	CALL	SEND
+				;GET ACK ON SECTOR
+	MVI	B,4		;WAIT 4 SECONDS MAX
 	CALL	RECV
-	JNC	RECV$SECT$ERR 	;LOOP UNTIL SENDER DONE
-	MVI	A,NAK
-	CALL	SEND		;SEND NAK
-	JMP	RECV$HDR
-
-;GOT CHAR - MUST BE SOH OR CTRL-C TO ABORT
-
-RHNTO:	CPI	SOH
-	JZ	GOT$SOH
+	JC	REPTB		;TIMEOUT, SEND AGAIN
+				;NO TIMEOUT SENDING SECTOR
+	CPI	ACK		;ACK RECIEVED?
+	JZ	SENDB		;..YES, SEND NEXT SECT
 	CPI	CTRLC		;control-c to abort?
 	JZ	ABORT
-	CPI	EOT
-	JZ	GOT$EOT
-	JMP	RECV$SECT$ERR
-
-GOT$SOH:
-	MVI	B,1
-	CALL	RECV
-	JC	RECV$HDR$TIMEOUT
-	MOV	D,A		;D=BLK #
-	MVI	B,1
-	CALL	RECV		;GET CMA'D SECT #
-	JC	RECV$HDR$TIMEOUT
-	CMA
-	CMP	D		;GOOD SECTOR #?
-	JZ	RECV$SECTOR
-	JMP	RECV$SECT$ERR
+	JMP	REPTB		;PROBABLY NAK - TRY AGAIN
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;RECV$SECTOR -- Get a sector via XMODEM
+;OPEN$FILE -- Open disk file for reading
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-RECV$SECTOR:
-	MOV	A,D		;GET SECTOR #
-	STA	RSECTNO
-	MVI	C,0		;INIT CKSUM
-	LXI	H,80H		;POINT TO BUFFER
-
-RECV$CHAR:
-	MVI	B,1		;1 SEC TIMEOUT
-	CALL	RECV		;GET CHAR
-	JC	RECV$HDR$TIMEOUT
-	MOV	M,A		;STORE CHAR
-	INR	L		;DONE?
-	JNZ	RECV$CHAR
-
-				;VERIFY CHECKSUM
-	MOV	D,C		;SAVE CHECKSUM
-	MVI	B,1		;TIMEOUT
-	CALL	RECV		;GET CHECKSUM
-	JC	RECV$HDR$TIMEOUT
-	CMP	D		;CHECK
-	JNZ	RECV$SECT$ERR
-
-	LDA	RSECTNO		;GOT A SECTOR, WRITE IF = 1+PREV SECTOR
-	MOV	B,A		;SAVE IT
-	LDA	SECTNO		;GET PREV
-	INR	A		;CALC NEXT SECTOR #
-	CMP	B		;MATCH?
-	JNZ	DO$ACK
-
-	LXI	D,FCB		;GOT NEW SECTOR - WRITE IT
-	MVI	C,WRITE
+OPEN$FILE:
+	LXI	D,FCB
+	MVI	C,OPEN
 	CALL	BDOS
-	ORA	A
-	JNZ	WRITE$ERROR
-	LDA	RSECTNO
-	STA	SECTNO		;UPDATE SECTOR #
-DO$ACK:	MVI	A,ACK
-	CALL	SEND
-	JMP	RECV$LOOP
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;WRITE$ERROR -- Print file write error and exit
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-WRITE$ERROR:
+	INR	A		;OPEN OK?
+	RNZ			;GOOD OPEN
 	CALL	ERXIT
-	DB	CR,LF,LF,'Error Writing File',CR,LF,'$'
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;GOT$EOT -- Handle end-of-transfer
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-GOT$EOT:
-	MVI	A,ACK		;ACK THE EOT
-	CALL	SEND
-	LXI	D,FCB
-	MVI	C,CLOSE
-	CALL	BDOS
-	INR	A
-	JNZ	XFER$CPLT
-	CALL	ERXIT
-	DB	CR,LF,LF,'Error Closing File',CR,LF,'$'
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;ERASE$OLD$FILE -- Delete any existing file before transfer
-;
-;Caution! If the transfer fails, the old file will stilll
-;have been deleted!
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ERASE$OLD$FILE:
-	LXI	D,FCB
-	MVI	C,SRCHF		;SEE IF IT EXISTS
-	CALL	BDOS
-	INR	A		;FOUND?
-	RZ			;NO, RETURN
-ERAY:	LXI	D,FCB
-	MVI	C,ERASE
-	CALL	BDOS
-	RET
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;MAKE$NEW$FILE -- Create a new empty file to write to
-;
-;This empty file will be what's left if the transfer fails,
-;since we call ERASE$OLD$FILE first.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-MAKE$NEW$FILE:
-	LXI	D,FCB
-	MVI	C,MAKE
-	CALL	BDOS
-	INR	A		;FF=BAD
-	RNZ			;OPEN OK
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;DIRFUL -- Print directory full error and exit
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-DIRFUL:	CALL	ERXIT
-	DB	CR,LF,LF,"Error - Can't Make File",CR,LF
-	DB	"(directory must be full)",CR,LF,'$'
+	DB	CR,LF,"Can't Open File",CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;ERXIT -- Exit and print an error message
@@ -292,7 +221,7 @@ ERXIT:	POP	D		;GET MESSAGE
 	CALL	BDOS		;PRINT MESSAGE
 EXIT:	LHLD	STACK		;GET ORIGINAL STACK
 	SPHL			;RESTORE IT
-	RET			;Back to CP/M
+	RET			;--EXIT-- TO CP/M
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;RECV -- XMODEM receive routine
@@ -300,16 +229,16 @@ EXIT:	LHLD	STACK		;GET ORIGINAL STACK
 ;This routine contains code that will be modified at run
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-RECV:	PUSH	D		;Save DE
+RECV:	PUSH	D		;SAVE
 MSEC:	LXI	D,63		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
 
-RCVSCR:	EQU	$+1		;Address of I/O port for the following IN
-MWTI:	IN	MODEMCR		;(10)
+RCVSCR:	EQU	$+1		;address of I/O port for the following IN
+MWTI:	IN	CONCR		;(10)
 	ANI	RCVMASK		;(7)
 	CPI	RCVRDY		;(7)
 	JZ	MCHAR		;(10) GOT CHAR
 
-	CPI	0		;(7) No char present, decrement countdown
+	CPI	0		;(7) No character present, decrement countdown
 	CPI	0		;(7) waste some time
 	DCR	E		;(5) COUNT DOWN
 	JNZ	MWTI		;(10) FOR TIMEOUT
@@ -318,8 +247,8 @@ MWTI:	IN	MODEMCR		;(10)
 	DCR	B		;DCR # OF SECONDS
 	JNZ	MSEC
 
-	POP	D		;Receive timed out, restore DE
-	STC			;Set carry flag to show timeout
+	POP	D		;Receive timeout, restore DE
+	STC			;CARRY SHOWS TIMEOUT
 	RET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -329,7 +258,7 @@ MWTI:	IN	MODEMCR		;(10)
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 RCVSDR:	EQU	$+1		;address of I/O port for the following IN
-MCHAR:	IN	MODEMDR
+MCHAR:	IN	CONDR
 	POP	D		;RESTORE DE
 	PUSH	PSW		;CALC CHECKSUM
 	ADD	C
@@ -338,27 +267,69 @@ MCHAR:	IN	MODEMDR
 	ORA	A		;TURN OFF CARRY TO SHOW NO TIMEOUT
 	RET
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SEND -- Transmit an XMODEM character
 ;
 ;This routine contains code that will be modified at run
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-SEND	PUSH	PSW		;CHECK IF MONITORING OUTPUT
+SEND:	PUSH	PSW		;CHECK IF MONITORING OUTPUT
 	ADD	C		;CALC CKSUM
 	MOV	C,A
 
-SNDSCR	EQU	$+1		;address of I/O port for the following IN
-SENDW	IN	MODEMCR
+SNDSCR:	EQU	$+1		;address of I/O port for the following IN
+SENDW:	IN	CONCR
 	ANI	XMTMASK
 	CPI	XMTRDY
 	JNZ	SENDW
 	POP	PSW		;GET CHAR
 
-SNDSDR	EQU	$+1		;address of I/O port for the following IN
-	OUT	MODEMDR
+SNDSDR:	EQU	$+1		;address of I/O port for the following IN
+	OUT	CONDR
 	RET
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;READ$SECTOR -- Read a file sector into memory
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+READ$SECTOR:
+	LXI	D,FCB
+	MVI	C,READ
+	CALL	BDOS
+	ORA	A
+	RZ
+	DCR	A		;EOF?
+	JNZ	RDERR		;No, we have an error
+
+	XRA	A		;Reached EOF
+	STA	ERRCT
+SEOT:	MVI	A,EOT
+	CALL	SEND
+	MVI	B,3		;WAIT 3 SEC FOR TIMEOUT
+	CALL	RECV
+	JC	EOTERR		;EOT TIMEOUT
+	CPI	ACK
+	JZ	XFER$CPLT
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;EOTERR -- Handle no EOT at end of transfer
+;
+;This routine is called when we've finished the transfer
+;but never received an EOT from the receiver.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+EOTERR:	LDA	ERRCT
+	INR	A
+	STA	ERRCT
+	CPI	ERRLMT
+	JC	SEOT
+	CALL	ERXIT
+	DB	CR,LF,LF
+	DB	'No ACK received on EOT, but transfer is complete.',CR,LF,'$'
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;RDERR -- Handle file read error
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+RDERR:	CALL	ERXIT
+	DB	CR,LF,'File Read Error',CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;XFER$CPLT -- XMODEM transfer done, clean up
@@ -370,27 +341,62 @@ XFER$CPLT:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;ABORT -- Exit from a user abort
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ABORT:	call	ERXIT
-	db	CR,LF,LF,'Transfer Aborted',CR,LF,'$'
+ABORT	CALL	ERXIT
+	DB	CR,LF,LF,'Transfer Aborted',CR,LF,'$'
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;CALCRC -- Update the 16-bit CRC value with another byte
+;
+;This routine copied from Martin Eberhard
+;
+;A and DE registers are not preserved.
+;
+;pre: A contains byte to add to CRC
+;pre: CRC16 holds the current CRC value
+;post: CRC16 has been updated
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CALCRC:	PUSH	B		;save bc, hl
+	PUSH	H
+	LHLD	CRC16		;get CRC so far
+	XRA	H		;XOR into CRC top byte
+	MOV	H,A
+	LXI	B,1021H		;bc=CRC16 polynomial
+	MVI	D,8		;prepare to rotate 8 bits
+
+CROTLP:	DAD	H		;16-bit shift
+	JNC	CCLR		;skip if bit 15 was 0
+	MOV	A,H		;CRC=CRC xor 1021H
+	XRA	B
+	MOV	H,A
+	MOV	A,L
+	XRA	C
+	MOV	L,A
+CCLR:	DCR	D
+	JNZ	CROTLP		;rotate 8 times
+
+	SHLD	CRC16		;save updated CRC
+	POP	H		;restore hl, bc
+	POP	B
+	RET
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Message Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-MSENDM:	db	'Send file using XMODEM on MODEM port (0xF0/F1)...$'
-MSENDP:	db	'Send file using XMODEM on PRINTER port (0xF2/F3)...$'
-MHELP:	db	CR,LF,'PCGET v1.0.1 for Otrona Attache',CR,LF,LF
-	db	'Receives a file from a PC through a serial port',CR,LF
+MRCVC:	db	'Start XMODEM file receive on CONSOLE port now...$'
+MHELP:	db	CR,LF,'PCPUT v1.0.1 for Quick and Timely SBC 2/4',CR,LF,LF
+	db	'Transmits a file to a PC through a serial port',CR,LF
 	db	'using the XMODEM protocol.',CR,LF,LF
-	db	'Usage: PCGET file.ext [P]',CR,LF
-	db	'   MODEM port (0xF0/F1) used by default',CR,LF
-	db	'   Specify P to use PRINTER port (port 0)',CR,LF,'$'
+	db	'Usage: PCPUT file.ext',CR,LF
+	db	'   CONSOLE port used by default',CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Variables and Storage Defines
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	DS	40	;STACK AREA
 STACK	DS	2	;STACK POINTER
-RSECTNO	DS	1	;RECEIVED SECTOR NUMBER
-SECTNO	DS	1	;CURRENT SECTOR NUMBER
+SECTNO	DS	1	;CURRENT SECTOR NUMBER 
+ERRCT	DS	1	;ERROR COUNT
+CRCFLAG	ds	1	;non-zero if using CRC
+CRC16	ds	2	;computed crc
 
 	END

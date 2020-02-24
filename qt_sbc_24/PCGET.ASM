@@ -1,8 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;PCGET -- Receive files via XMODEM from a PC
 ;
-;SD Systems SBC-200 version, 4 MHz Z80. Supports built-in
-;console port.
+;Quick and Timely SBC 2/4 version, 4 MHz Z80. Supports 
+;built-in console port.
+;
+;PCGET won't work over the console port with the stock Q&T
+;ROM monitor, since it sets the consle port as 7E1 instead
+;of 8N1. Consider running GWMON as an alternative!
 ;
 ;This CP/M program receives a file from a PC via a serial 
 ;port and writes it to a file on the CP/M system. The file
@@ -12,7 +16,7 @@
 ;MODEM program.
 ;
 ;Hacked together by Mike Douglas for the Horizon Computer
-;Updated by Glitch Works for the SD Systems SBC-200
+;Updated by Glitch Works for the Quick and Timely SBC 2/4
 ;
 ;Glitch Works customization and cleanup is:
 ;
@@ -23,7 +27,7 @@
 ;
 ;Ver	Date	   Desc
 ;---    --------   ----------------------------------------
-;1.0.1  2019-06-27 Customized for the SD Systems SBC-200
+;1.0.1  2019-06-27 Customized for the Q&T SBC 2/4
 ;
 ;1.0    10/7/15	   Initial version. This code is almost the
 ;		   same as the Vector Graphic version as 
@@ -34,8 +38,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Serial Port Equates
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-CONCR	EQU	7DH		;Console port control register (port 2)
-CONDR	EQU	7CH		;Console port data register
+CONCR	EQU	2FH		;Console port control register
+CONDR	EQU	2EH		;Console port data register
 
 XMTMASK	EQU	1		;MASK TO ISOLATE XMIT READY BIT
 XMTRDY	EQU	1		;VALUE WHEN READY
@@ -293,7 +297,7 @@ EXIT:	LHLD	STACK		;GET ORIGINAL STACK
 ;time if a non-default port is selected for the transfer.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 RECV:	PUSH	D		;Save DE
-MSEC:	LXI	D,248		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
+MSEC:	LXI	D,63		;63 cycles, 4.032ms/wrap*248=1s (4MHz)
 
 RCVSCR:	EQU	$+1		;Address of I/O port for the following IN
 MWTI:	IN	CONCR		;(10)
@@ -369,7 +373,7 @@ ABORT:	call	ERXIT
 ;Message Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 MSENDC:	db	'Send file using XMODEM on CONSOLE port...$'
-MHELP:	db	CR,LF,'PCGET v1.0.1 for SD Systems SBC-200',CR,LF,LF
+MHELP:	db	CR,LF,'PCGET v1.0.1 for Quick and Timely SBC 2/4',CR,LF,LF
 	db	'Receives a file from a PC through a serial port',CR,LF
 	db	'using the XMODEM protocol.',CR,LF,LF
 	db	'Usage: PCGET file.ext',CR,LF
