@@ -379,10 +379,10 @@ CCLR:	DCR	D
 ;Message Strings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 MRCVC:	db	'Start XMODEM file receive on CONSOLE port now...$'
-MHELP:	db	CR,LF,'PCPUT v1.0.1 for Alspa ACI-2',CR,LF,LF
+MHELP:	db	CR,LF,'PCPUT v1.0.1 for SD Systems SBC-200',CR,LF,LF
 	db	'Transmits a file to a PC through a serial port',CR,LF
 	db	'using the XMODEM protocol.',CR,LF,LF
-	db	'Usage: PCPUT file.ext [MP]',CR,LF
+	db	'Usage: PCPUT file.ext',CR,LF
 	db	'   CONSOLE port used by default',CR,LF,'$'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
